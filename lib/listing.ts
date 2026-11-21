@@ -11,7 +11,7 @@ export function listingFromScan(scan: Scan, existing?: ListingDraft): ListingDra
     category: existing?.category ?? scan.item.category, size: existing?.size ?? scan.item.size,
     measurements: existing?.measurements ?? "", condition: existing?.condition ?? "Needs verification",
     description: existing?.description ?? `Research notes for ${scan.item.name}. Verify condition, measurements, and specifications before publishing.`,
-    photoUrls: existing?.photoUrls?.length ? existing.photoUrls : scan.photoUrl ? [scan.photoUrl] : [],
+    photoUrls: existing?.photoUrls?.length ? existing.photoUrls : scan.photoUrls?.length ? scan.photoUrls : scan.photoUrl ? [scan.photoUrl] : [],
     purchasePrice: existing?.purchasePrice ?? scan.purchaseCost,
     targetPrice: existing?.targetPrice ?? scan.research.sold[0]?.price ?? scan.research.active[0]?.price,
     marketplace: existing?.marketplace ?? "eBay", marketplaceUrl: existing?.marketplaceUrl ?? "",

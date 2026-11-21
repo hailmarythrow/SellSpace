@@ -13,7 +13,7 @@ export type Listing = {
 
 export type Item = {
   id: string; name: string; brand: string; model: string; category: string;
-  color: string; size: string; confidence: number; imageUrl?: string;
+  color: string; size: string; confidence: number; imageUrl?: string; notes?: string; missingAttributes?: string[];
 };
 
 export type Costs = { purchase: number; fees: number; shipping: number; other: number };
@@ -26,6 +26,7 @@ export type Scan = {
   id: string;
   ownerId: string;
   photoUrl?: string;
+  photoUrls?: string[];
   createdAt: string;
   item: Item;
   research: ResearchResult;

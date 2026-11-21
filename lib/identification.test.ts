@@ -11,4 +11,8 @@ describe("Gemini identification validation", () => {
   it("rejects low-confidence identification responses", () => {
     expect(identificationSchema.safeParse({ name: "", brand: "", model: "", category: "", color: "", size: "", confidence: 0.1 }).success).toBe(false);
   });
+  it("accepts constrained context follow-up attributes", () => {
+    const result = identificationSchema.safeParse({ name: "Phone case", brand: "OtterBox", model: "", category: "Phone cases", color: "Black", size: "", confidence: 0.9, missingAttributes: ["compatible_phone_model"] });
+    expect(result.success).toBe(true);
+  });
 });

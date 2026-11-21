@@ -3,7 +3,7 @@ import { identificationSchema, parseImageDataUrl } from "@/lib/identification";
 import { parseGeminiFailure } from "@/lib/gemini-errors";
 import { resolveGeminiModel } from "@/lib/gemini-models";
 
-const prompt = `Identify the physical product in this photograph for a resale research app. Return ONLY valid JSON with these keys: name, brand, model, category, color, size, confidence, notes. Use empty strings for details that are not visible. Do not guess exact specifications, measurements, or a model number that is not supported by visible evidence. confidence must be a number from 0 to 1.`;
+const prompt = `Identify the physical product in this photograph for a resale research app. Return ONLY valid JSON with these keys: name, brand, model, category, color, size, confidence, notes, missingAttributes. Use empty strings for details that are not visible. Do not guess exact specifications, measurements, compatibility, edition, year, functionality, or a model number that is not supported by visible evidence. confidence must be a number from 0 to 1. missingAttributes must contain only relevant unresolved keys from this list: compatible_phone_model, size, shoe_model, brand, model_number, functionality, edition_or_year. Use an empty array when no important follow-up is needed.`;
 
 export async function POST(request: Request) {
   const key = process.env.GEMINI_API_KEY;

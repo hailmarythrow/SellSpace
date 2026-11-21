@@ -13,7 +13,8 @@ const demoSold: Listing[] = [
   { id: "demo-s2", title: "Seiko SNK809 field watch with strap", price: 175, shipping: 0, condition: "Like new", imageUrl: images[1], url: "https://www.ebay.com/sch/i.html?_nkw=seiko+snk809&LH_Sold=1", marketplace: "Manual", kind: "sold", verified: true, demo: true, classification: "verified_transaction", verificationStatus: "verified", provider: "Manual sold comparable" }
 ];
 
-export const demoProvider: MarketplaceProvider = { name: "Demo marketplace provider", capabilities: { active: true, sold: true }, async searchActive() { return listingArraySchema.parse(demoActive); }, async searchSold() { return listingArraySchema.parse(demoSold); } };
+const demoMatchesQuery = (query: string) => /seiko|watch|green dial|snk809/i.test(query);
+export const demoProvider: MarketplaceProvider = { name: "Demo marketplace provider", capabilities: { active: true, sold: true }, async searchActive(query) { return listingArraySchema.parse(demoMatchesQuery(query) ? demoActive : []); }, async searchSold(query) { return listingArraySchema.parse(demoMatchesQuery(query) ? demoSold : []); } };
 export const manualSoldProvider: MarketplaceProvider = { name: "Manual sold comparables", capabilities: { active: false, sold: true }, async searchActive() { return []; }, async searchSold() { return []; } };
 
 const now = () => new Date().toISOString();
@@ -38,14 +39,16 @@ async function soldgraphSearch(query: string, marketplace: Marketplace, kind: "a
 export const soldgraphProvider = { name: "Soldgraph", capabilities: { active: Boolean(process.env.SOLDGRAPH_API_KEY), sold: Boolean(process.env.SOLDGRAPH_API_KEY) }, async searchActive(query: string) { const markets: Marketplace[] = ["eBay", "Mercari", "Poshmark", "Depop"]; return (await Promise.all(markets.map((market) => soldgraphSearch(query, market, "active")))).flat(); }, async searchSold(query: string) { const markets: Marketplace[] = ["eBay", "Mercari", "Poshmark"]; return (await Promise.all(markets.map((market) => soldgraphSearch(query, market, "sold")))).flat(); } };
 
 export const externalSearchLinks = (query: string) => { const q = encodeURIComponent(query); return [{ marketplace: "eBay" as const, url: `https://www.ebay.com/sch/i.html?_nkw=${q}&LH_Sold=1`, label: "Search eBay sold" }, { marketplace: "Mercari" as const, url: `https://www.mercari.com/search/?keyword=${q}`, label: "Search Mercari" }, { marketplace: "Poshmark" as const, url: `https://poshmark.com/search?query=${q}`, label: "Search Poshmark" }, { marketplace: "Depop" as const, url: `https://www.depop.com/search/?q=${q}`, label: "Search Depop" }]; };
+const relevantListings = (query: string, listings: Listing[]) => { const tokens = query.toLowerCase().split(/[^a-z0-9]+/).filter((token) => token.length >= 4 && !["with", "from", "item", "this"].includes(token)); if (!tokens.length) return listings; return listings.filter((listing) => tokens.some((token) => listing.title.toLowerCase().includes(token))); };
 
-export const getResearch = async (query: string): Promise<ResearchResult> => {
-  const liveConfigured = ebayProvider.capabilities.active || soldgraphProvider.capabilities.active;
-  if (!liveConfigured) return { active: await demoProvider.searchActive(query), sold: await demoProvider.searchSold(query), soldAvailable: true, sourceNote: "DEMO data only. Add eBay or Soldgraph credentials for live provider results.", externalSearchLinks: externalSearchLinks(query), confidence: "low" };
+export const getResearch = async (query: string, options: { demo?: boolean } = {}): Promise<ResearchResult> => {
+  if (options.demo) return { active: await demoProvider.searchActive(query), sold: await demoProvider.searchSold(query), soldAvailable: true, source: "demo", sourceNote: "DEMO data only. These synthetic comparables are not marketplace results.", externalSearchLinks: externalSearchLinks(query), confidence: "low" };
+  const liveConfigured = Boolean(process.env.EBAY_CLIENT_ID && process.env.EBAY_CLIENT_SECRET) || Boolean(process.env.SOLDGRAPH_API_KEY);
+  if (!liveConfigured) return { active: [], sold: [], soldAvailable: false, source: "unavailable", sourceNote: "Live pricing unavailable. Configure an authorized marketplace provider or use the explicitly labeled Run Demo action.", externalSearchLinks: externalSearchLinks(query), confidence: "low" };
   const [ebayActive, graphActive, graphSold] = await Promise.allSettled([ebayProvider.searchActive(query), soldgraphProvider.searchActive(query), soldgraphProvider.searchSold(query)]);
-  const active = [...(ebayActive.status === "fulfilled" ? ebayActive.value : []), ...(graphActive.status === "fulfilled" ? graphActive.value : [])]; const sold = graphSold.status === "fulfilled" ? graphSold.value : [];
+  const active = relevantListings(query, [...(ebayActive.status === "fulfilled" ? ebayActive.value : []), ...(graphActive.status === "fulfilled" ? graphActive.value : [])]); const sold = relevantListings(query, graphSold.status === "fulfilled" ? graphSold.value : []);
   const note = `Live provider research. ${sold.length ? `${sold.length} sold records returned; verify each source's price classification.` : "Sold-price evidence is unavailable or insufficient."}`;
-  return { active, sold, soldAvailable: sold.length > 0, sourceNote: note, externalSearchLinks: externalSearchLinks(query), confidence: active.length + sold.length >= 10 ? "high" : active.length + sold.length >= 3 ? "medium" : "low" };
+  return { active, sold, soldAvailable: sold.length > 0, source: "live", sourceNote: note, externalSearchLinks: externalSearchLinks(query), confidence: active.length + sold.length >= 10 ? "high" : active.length + sold.length >= 3 ? "medium" : "low" };
 };
 
 export const providerHealth = async () => ({ gemini: await checkGeminiModel(), openai: { configured: Boolean(process.env.OPENAI_API_KEY), available: Boolean(process.env.OPENAI_API_KEY) }, ebay: { configured: ebayProvider.capabilities.active, available: ebayProvider.capabilities.active }, soldgraph: { configured: soldgraphProvider.capabilities.active, available: soldgraphProvider.capabilities.active }, supabase: { configured: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY), available: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) }, checkedAt: now() });

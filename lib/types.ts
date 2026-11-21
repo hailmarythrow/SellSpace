@@ -18,7 +18,9 @@ export type Item = {
 
 export type Costs = { purchase: number; fees: number; shipping: number; other: number };
 
-export type ResearchResult = { active: Listing[]; sold: Listing[]; soldAvailable: boolean; sourceNote: string; externalSearchLinks?: { marketplace: Marketplace; url: string; label: string }[]; confidence?: "low" | "medium" | "high"; resaleRange?: { low: number; high: number; currency: string } };
+export type ResearchSource = "demo" | "live" | "unavailable";
+export type ResearchResult = { active: Listing[]; sold: Listing[]; soldAvailable: boolean; source?: ResearchSource; sourceNote: string; externalSearchLinks?: { marketplace: Marketplace; url: string; label: string }[]; confidence?: "low" | "medium" | "high"; resaleRange?: { low: number; high: number; currency: string } };
+export const researchSource = (research: ResearchResult): ResearchSource => research.source ?? (research.active.some((listing) => listing.demo) || research.sold.some((listing) => listing.demo) ? "demo" : research.active.length || research.sold.length ? "live" : "unavailable");
 
 export type Scan = {
   id: string;

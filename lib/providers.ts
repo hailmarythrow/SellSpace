@@ -1,20 +1,6 @@
 import type { Listing, Marketplace, MarketplaceProvider, ResearchResult } from "./types";
-import { listingArraySchema } from "./schemas";
 import { checkGeminiModel } from "./gemini-health";
 
-const images = ["https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=160&q=80", "https://images.unsplash.com/photo-1524805444758-089113d48a6d?w=160&q=80", "https://images.unsplash.com/photo-1547996160-81dfa63595aa?w=160&q=80"];
-const demoActive: Listing[] = [
-  { id: "demo-a1", title: "Seiko 5 Automatic Field Watch Green Dial", price: 165, shipping: 12, condition: "Good", imageUrl: images[0], url: "https://www.ebay.com/sch/i.html?_nkw=seiko+5+green+dial", marketplace: "eBay", kind: "active", demo: true, classification: "active_asking", provider: "Demo marketplace provider" },
-  { id: "demo-a2", title: "Seiko SNK809 Black Canvas Strap Watch", price: 189, shipping: 0, condition: "Like new", imageUrl: images[1], url: "https://www.ebay.com/sch/i.html?_nkw=seiko+snk809", marketplace: "eBay", kind: "active", demo: true, classification: "active_asking", provider: "Demo marketplace provider" },
-  { id: "demo-a3", title: "Seiko 5 Military Automatic 37mm Watch", price: 142, shipping: 9, condition: "Good", imageUrl: images[2], url: "https://www.ebay.com/sch/i.html?_nkw=seiko+5+military", marketplace: "eBay", kind: "active", demo: true, classification: "active_asking", provider: "Demo marketplace provider" }
-];
-const demoSold: Listing[] = [
-  { id: "demo-s1", title: "Seiko 5 Green Dial Automatic, clean running", price: 148, shipping: 0, condition: "Good", imageUrl: images[0], url: "https://www.ebay.com/sch/i.html?_nkw=seiko+5+green+dial&LH_Sold=1", marketplace: "Manual", kind: "sold", verified: true, demo: true, classification: "verified_transaction", verificationStatus: "verified", provider: "Manual sold comparable" },
-  { id: "demo-s2", title: "Seiko SNK809 field watch with strap", price: 175, shipping: 0, condition: "Like new", imageUrl: images[1], url: "https://www.ebay.com/sch/i.html?_nkw=seiko+snk809&LH_Sold=1", marketplace: "Manual", kind: "sold", verified: true, demo: true, classification: "verified_transaction", verificationStatus: "verified", provider: "Manual sold comparable" }
-];
-
-const demoMatchesQuery = (query: string) => /seiko|watch|green dial|snk809/i.test(query);
-export const demoProvider: MarketplaceProvider = { name: "Demo marketplace provider", capabilities: { active: true, sold: true }, async searchActive(query) { return listingArraySchema.parse(demoMatchesQuery(query) ? demoActive : []); }, async searchSold(query) { return listingArraySchema.parse(demoMatchesQuery(query) ? demoSold : []); } };
 export const manualSoldProvider: MarketplaceProvider = { name: "Manual sold comparables", capabilities: { active: false, sold: true }, async searchActive() { return []; }, async searchSold() { return []; } };
 
 const now = () => new Date().toISOString();
@@ -41,13 +27,12 @@ export const soldgraphProvider = { name: "Soldgraph", capabilities: { active: Bo
 export const externalSearchLinks = (query: string) => { const q = encodeURIComponent(query); return [{ marketplace: "eBay" as const, url: `https://www.ebay.com/sch/i.html?_nkw=${q}&LH_Sold=1`, label: "Search eBay sold" }, { marketplace: "Mercari" as const, url: `https://www.mercari.com/search/?keyword=${q}`, label: "Search Mercari" }, { marketplace: "Poshmark" as const, url: `https://poshmark.com/search?query=${q}`, label: "Search Poshmark" }, { marketplace: "Depop" as const, url: `https://www.depop.com/search/?q=${q}`, label: "Search Depop" }]; };
 const relevantListings = (query: string, listings: Listing[]) => { const tokens = query.toLowerCase().split(/[^a-z0-9]+/).filter((token) => token.length >= 4 && !["with", "from", "item", "this"].includes(token)); if (!tokens.length) return listings; return listings.filter((listing) => tokens.some((token) => listing.title.toLowerCase().includes(token))); };
 
-export const getResearch = async (query: string, options: { demo?: boolean } = {}): Promise<ResearchResult> => {
-  if (options.demo) return { active: await demoProvider.searchActive(query), sold: await demoProvider.searchSold(query), soldAvailable: true, source: "demo", sourceNote: "DEMO data only. These synthetic comparables are not marketplace results.", externalSearchLinks: externalSearchLinks(query), confidence: "low" };
+export const getResearch = async (query: string): Promise<ResearchResult> => {
   const liveConfigured = Boolean(process.env.EBAY_CLIENT_ID && process.env.EBAY_CLIENT_SECRET) || Boolean(process.env.SOLDGRAPH_API_KEY);
-  if (!liveConfigured) return { active: [], sold: [], soldAvailable: false, source: "unavailable", sourceNote: "Live pricing unavailable. Configure an authorized marketplace provider or use the explicitly labeled Run Demo action.", externalSearchLinks: externalSearchLinks(query), confidence: "low" };
+  if (!liveConfigured) return { active: [], sold: [], soldAvailable: false, source: "unavailable", sourceNote: "Live marketplace pricing is currently unavailable.", externalSearchLinks: externalSearchLinks(query), confidence: "low" };
   const [ebayActive, graphActive, graphSold] = await Promise.allSettled([ebayProvider.searchActive(query), soldgraphProvider.searchActive(query), soldgraphProvider.searchSold(query)]);
   const active = relevantListings(query, [...(ebayActive.status === "fulfilled" ? ebayActive.value : []), ...(graphActive.status === "fulfilled" ? graphActive.value : [])]); const sold = relevantListings(query, graphSold.status === "fulfilled" ? graphSold.value : []);
-  const note = `Live provider research. ${sold.length ? `${sold.length} sold records returned; verify each source's price classification.` : "Sold-price evidence is unavailable or insufficient."}`;
+  const note = active.length || sold.length ? `Live provider research. ${sold.length ? `${sold.length} sold records returned; verify each source's price classification.` : "Sold-price evidence is unavailable or insufficient."}` : "Live marketplace pricing is currently unavailable.";
   return { active, sold, soldAvailable: sold.length > 0, source: "live", sourceNote: note, externalSearchLinks: externalSearchLinks(query), confidence: active.length + sold.length >= 10 ? "high" : active.length + sold.length >= 3 ? "medium" : "low" };
 };
 

@@ -12,15 +12,11 @@ describe("marketplace research source rules", () => {
     expect(result.source).toBe("unavailable");
     expect(result.active).toEqual([]);
     expect(result.sold).toEqual([]);
-    expect(result.sourceNote).toContain("Live pricing unavailable");
+    expect(result.sourceNote).toBe("Live marketplace pricing is currently unavailable.");
   });
 
-  it("only returns synthetic demo comparables when explicitly requested and relevant", async () => {
-    const demo = await getResearch("Seiko SNK809 watch", { demo: true });
-    expect(demo.source).toBe("demo");
-    expect(demo.active.every((listing) => listing.demo && /seiko/i.test(listing.title))).toBe(true);
-
-    const unrelated = await getResearch("OtterBox iPhone case", { demo: true });
+  it("does not return fictional comparables for an unrelated product", async () => {
+    const unrelated = await getResearch("OtterBox iPhone case");
     expect(unrelated.active).toEqual([]);
     expect(unrelated.sold).toEqual([]);
   });

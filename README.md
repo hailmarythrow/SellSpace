@@ -1,21 +1,21 @@
 # SellerApp
 
-SellerApp is a mobile-first AI-assisted resale research workspace. The MVP supports a complete demo workflow: quick-scan an item, correct an editable identification, compare active asking prices with verified sold comparables, estimate net profit and ROI, save the scan, and convert it into an internal listing draft.
+SellerApp is a mobile-first AI-assisted resale research workspace. It quick-scans an item, corrects editable identification, retrieves authorized marketplace comparables, estimates net profit only from real sold evidence, saves the scan, and converts it into an internal listing draft.
 
 ## Run locally
 
 1. Install Node.js 20+.
 2. Run `npm install`.
-3. Copy `.env.example` to `.env.local` and leave marketplace values blank to test the unavailable-pricing state.
+3. Copy `.env.example` to `.env.local` and configure authorized marketplace credentials when available.
 4. Run `npm run dev` and open `http://localhost:3000`.
 
-Demo listings are deterministic, synthetic examples and are labeled `DEMO`. They are never presented as live marketplace results. The provider interfaces in `lib/providers.ts` are the extension point for authenticated eBay Browse API active searches, authorized sold sources, and future providers.
+All marketplace results must come from authorized providers or user-entered comparables. The provider interfaces in `lib/providers.ts` are the extension point for authenticated eBay Browse API active searches, authorized sold sources, and future providers.
 
 Saved scans and listing drafts currently persist in browser `localStorage` with stable IDs, ownership fields, and source-scan links. This keeps the app credential-free locally while leaving a straightforward migration path to Supabase tables for scans, inventory items, listings, marketplace listings, and sale records.
 
 ## Live research providers
 
-The research request now runs through `/api/research`, so provider keys remain server-only. Quick Scan and ordinary research never use demo prices. With no live marketplace keys configured, SellerApp shows `Live pricing unavailable` and external marketplace links. Synthetic listings are available only through an explicitly labeled `Run Demo` action. When a live provider is configured, the app returns only live/provider-reported data and does not silently fall back to demo prices.
+The research request now runs through `/api/research`, so provider keys remain server-only. With no live marketplace keys configured, SellerApp shows `Live marketplace pricing is currently unavailable.` and external marketplace links. It does not silently substitute fabricated prices. When a live provider is configured, the app returns only live/provider-reported data.
 
 Quick Scan image identification runs through `/api/identify` using `GEMINI_API_KEY`. The preferred model is `gemini-3.5-flash-lite`. Before identification, the server queries Google's model endpoint, verifies `generateContent` support, and makes a small real image-generation probe. If the preferred model is unavailable to the key, `GEMINI_FALLBACK_MODELS` is tried in order. Keep the key server-side; it is never exposed to browser code. `/api/health` reports the selected model, fallback use, and probe attempts without returning secrets. The route validates image type/size and the structured identification response; failures stop the workflow with an error and do not trigger research.
 

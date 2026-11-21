@@ -21,7 +21,7 @@ export default function ListingEditor() {
   const save = () => { saveListing({ ...listing, updatedAt: new Date().toISOString() }); setSaved(true); };
   const remove = () => { if (window.confirm("Delete this draft? This cannot be undone.")) { deleteListing(listing.id); window.location.href = "/listings"; } };
   const soldPrices = source?.research.sold.map((item) => item.price) ?? [];
-  const estimate = source?.research.source === "live" && soldPrices.length ? soldPrices : []; const low = estimate.length ? Math.min(...estimate) : null; const high = estimate.length ? Math.max(...estimate) : null; const avg = median(estimate);
+  const estimate = (source?.research.source === "live" || source?.research.source === "manual") && soldPrices.length ? soldPrices : []; const low = estimate.length ? Math.min(...estimate) : null; const high = estimate.length ? Math.max(...estimate) : null; const avg = median(estimate);
   const actual = calculateActualProfit(listing.actualSalePrice ?? 0, listing.purchasePrice, listing.saleFees, listing.saleCosts);
   const checklist = [{ label: "Source scan added", done: Boolean(source) }, { label: "Verify condition", done: listing.condition !== "Needs verification" && Boolean(listing.condition) }, { label: "Add measurements", done: Boolean(listing.measurements) }, { label: "Add description", done: Boolean(listing.description) }, { label: "Add photos (3+)", done: listing.photoUrls.length >= 3 }];
   return <AppShell title="Listing draft" eyebrow="Listing management"><div className="space-y-5">

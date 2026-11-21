@@ -1,0 +1,50 @@
+import type { Listing, Marketplace, MarketplaceProvider, ResearchResult } from "./types";
+import { listingArraySchema } from "./schemas";
+
+const images = ["https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=160&q=80", "https://images.unsplash.com/photo-1524805444758-089113d48a6d?w=160&q=80", "https://images.unsplash.com/photo-1547996160-81dfa63595aa?w=160&q=80"];
+const demoActive: Listing[] = [
+  { id: "demo-a1", title: "Seiko 5 Automatic Field Watch Green Dial", price: 165, shipping: 12, condition: "Good", imageUrl: images[0], url: "https://www.ebay.com/sch/i.html?_nkw=seiko+5+green+dial", marketplace: "eBay", kind: "active", demo: true, classification: "active_asking", provider: "Demo marketplace provider" },
+  { id: "demo-a2", title: "Seiko SNK809 Black Canvas Strap Watch", price: 189, shipping: 0, condition: "Like new", imageUrl: images[1], url: "https://www.ebay.com/sch/i.html?_nkw=seiko+snk809", marketplace: "eBay", kind: "active", demo: true, classification: "active_asking", provider: "Demo marketplace provider" },
+  { id: "demo-a3", title: "Seiko 5 Military Automatic 37mm Watch", price: 142, shipping: 9, condition: "Good", imageUrl: images[2], url: "https://www.ebay.com/sch/i.html?_nkw=seiko+5+military", marketplace: "eBay", kind: "active", demo: true, classification: "active_asking", provider: "Demo marketplace provider" }
+];
+const demoSold: Listing[] = [
+  { id: "demo-s1", title: "Seiko 5 Green Dial Automatic, clean running", price: 148, shipping: 0, condition: "Good", imageUrl: images[0], url: "https://www.ebay.com/sch/i.html?_nkw=seiko+5+green+dial&LH_Sold=1", marketplace: "Manual", kind: "sold", verified: true, demo: true, classification: "verified_transaction", verificationStatus: "verified", provider: "Manual sold comparable" },
+  { id: "demo-s2", title: "Seiko SNK809 field watch with strap", price: 175, shipping: 0, condition: "Like new", imageUrl: images[1], url: "https://www.ebay.com/sch/i.html?_nkw=seiko+snk809&LH_Sold=1", marketplace: "Manual", kind: "sold", verified: true, demo: true, classification: "verified_transaction", verificationStatus: "verified", provider: "Manual sold comparable" }
+];
+
+export const demoProvider: MarketplaceProvider = { name: "Demo marketplace provider", capabilities: { active: true, sold: true }, async searchActive() { return listingArraySchema.parse(demoActive); }, async searchSold() { return listingArraySchema.parse(demoSold); } };
+export const manualSoldProvider: MarketplaceProvider = { name: "Manual sold comparables", capabilities: { active: false, sold: true }, async searchActive() { return []; }, async searchSold() { return []; } };
+
+const now = () => new Date().toISOString();
+const safeUrl = (value: unknown) => typeof value === "string" && /^https?:\/\//i.test(value) ? value : "";
+const condition = (value: unknown): Listing["condition"] => { const text = String(value ?? "").toLowerCase(); if (text.includes("new")) return "New"; if (text.includes("like")) return "Like new"; if (text.includes("fair")) return "Fair"; return "Good"; };
+const mapExternal = (raw: Record<string, unknown>, marketplace: Marketplace, kind: "active" | "sold", provider: string): Listing | null => {
+  const price = Number(raw.price ?? raw.current_price ?? raw.amount ?? raw.sale_price); const url = safeUrl(raw.url ?? raw.item_url ?? raw.listing_url ?? raw.link); const title = String(raw.title ?? raw.name ?? "").trim();
+  if (!title || !Number.isFinite(price) || price < 0 || !url) return null;
+  const isPoshmarkSold = marketplace === "Poshmark" && kind === "sold";
+  return { id: String(raw.id ?? raw.item_id ?? raw.listing_id ?? `${marketplace}-${title}-${price}`), title, price, shipping: Number(raw.shipping ?? 0) || 0, condition: condition(raw.condition), imageUrl: safeUrl(raw.image_url ?? raw.image ?? raw.thumbnail) || undefined, url, marketplace, kind, currency: String(raw.currency ?? "USD"), classification: kind === "active" ? "active_asking" : isPoshmarkSold ? "displayed_sold" : "displayed_sold", verificationStatus: "source_reported", provider, retrievedAt: now(), soldDate: typeof raw.sold_date === "string" ? raw.sold_date : undefined, listingDate: typeof raw.listing_date === "string" ? raw.listing_date : undefined };
+};
+
+async function fetchJson(url: string, init: RequestInit = {}) { const response = await fetch(url, { ...init, signal: AbortSignal.timeout(8000), headers: { Accept: "application/json", ...(init.headers ?? {}) }, cache: "no-store" }); if (!response.ok) throw new Error(`Provider returned ${response.status}`); return response.json() as Promise<unknown>; }
+
+async function ebayToken() { const client = process.env.EBAY_CLIENT_ID; const secret = process.env.EBAY_CLIENT_SECRET; if (!client || !secret) return null; const auth = Buffer.from(`${client}:${secret}`).toString("base64"); const data = await fetchJson("https://api.ebay.com/identity/v1/oauth2/token", { method: "POST", headers: { Authorization: `Basic ${auth}`, "Content-Type": "application/x-www-form-urlencoded" }, body: "grant_type=client_credentials&scope=https%3A%2F%2Fapi.ebay.com%2Foauth%2Fapi_scope" }) as { access_token?: string }; return data.access_token ?? null; }
+
+export const ebayProvider: MarketplaceProvider = { name: "eBay Browse API", capabilities: { active: Boolean(process.env.EBAY_CLIENT_ID && process.env.EBAY_CLIENT_SECRET), sold: false }, async searchActive(query) { const token = await ebayToken(); if (!token) return []; const data = await fetchJson(`https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(query)}&limit=24`, { headers: { Authorization: `Bearer ${token}`, "X-EBAY-C-MARKETPLACE-ID": process.env.EBAY_MARKETPLACE_ID ?? "EBAY_US" } }) as { itemSummaries?: Record<string, unknown>[] }; return (data.itemSummaries ?? []).map((item) => mapExternal({ ...item, price: (item.price as { value?: string } | undefined)?.value, image_url: (item.image as { imageUrl?: string } | undefined)?.imageUrl, url: item.itemWebUrl ?? item.itemAffiliateWebUrl }, "eBay", "active", "eBay Browse API")).filter((item): item is Listing => Boolean(item)); }, async searchSold() { return []; } };
+
+const soldgraphMarkets: Record<Marketplace, string> = { eBay: "ebay", Mercari: "mercari", Poshmark: "poshmark", Depop: "depop", Manual: "" };
+async function soldgraphSearch(query: string, marketplace: Marketplace, kind: "active" | "sold") { const key = process.env.SOLDGRAPH_API_KEY; const market = soldgraphMarkets[marketplace]; if (!key || !market || (marketplace === "Depop" && kind === "sold")) return []; const path = kind === "active" ? "listings" : "sold"; const data = await fetchJson(`https://api.soldgraph.com/v1/${market}/${path}?q=${encodeURIComponent(query)}&country=us`, { headers: { Authorization: `Bearer ${key}` } }) as Record<string, unknown>; const rows = (data.rows ?? data.items ?? data.listings ?? data.results ?? []) as Record<string, unknown>[]; return rows.map((row) => mapExternal(row, marketplace, kind, "Soldgraph")).filter((item): item is Listing => Boolean(item)); }
+
+export const soldgraphProvider = { name: "Soldgraph", capabilities: { active: Boolean(process.env.SOLDGRAPH_API_KEY), sold: Boolean(process.env.SOLDGRAPH_API_KEY) }, async searchActive(query: string) { const markets: Marketplace[] = ["eBay", "Mercari", "Poshmark", "Depop"]; return (await Promise.all(markets.map((market) => soldgraphSearch(query, market, "active")))).flat(); }, async searchSold(query: string) { const markets: Marketplace[] = ["eBay", "Mercari", "Poshmark"]; return (await Promise.all(markets.map((market) => soldgraphSearch(query, market, "sold")))).flat(); } };
+
+export const externalSearchLinks = (query: string) => { const q = encodeURIComponent(query); return [{ marketplace: "eBay" as const, url: `https://www.ebay.com/sch/i.html?_nkw=${q}&LH_Sold=1`, label: "Search eBay sold" }, { marketplace: "Mercari" as const, url: `https://www.mercari.com/search/?keyword=${q}`, label: "Search Mercari" }, { marketplace: "Poshmark" as const, url: `https://poshmark.com/search?query=${q}`, label: "Search Poshmark" }, { marketplace: "Depop" as const, url: `https://www.depop.com/search/?q=${q}`, label: "Search Depop" }]; };
+
+export const getResearch = async (query: string): Promise<ResearchResult> => {
+  const liveConfigured = ebayProvider.capabilities.active || soldgraphProvider.capabilities.active;
+  if (!liveConfigured) return { active: await demoProvider.searchActive(query), sold: await demoProvider.searchSold(query), soldAvailable: true, sourceNote: "DEMO data only. Add eBay or Soldgraph credentials for live provider results.", externalSearchLinks: externalSearchLinks(query), confidence: "low" };
+  const [ebayActive, graphActive, graphSold] = await Promise.allSettled([ebayProvider.searchActive(query), soldgraphProvider.searchActive(query), soldgraphProvider.searchSold(query)]);
+  const active = [...(ebayActive.status === "fulfilled" ? ebayActive.value : []), ...(graphActive.status === "fulfilled" ? graphActive.value : [])]; const sold = graphSold.status === "fulfilled" ? graphSold.value : [];
+  const note = `Live provider research. ${sold.length ? `${sold.length} sold records returned; verify each source's price classification.` : "Sold-price evidence is unavailable or insufficient."}`;
+  return { active, sold, soldAvailable: sold.length > 0, sourceNote: note, externalSearchLinks: externalSearchLinks(query), confidence: active.length + sold.length >= 10 ? "high" : active.length + sold.length >= 3 ? "medium" : "low" };
+};
+
+export const providerHealth = async () => ({ openai: { configured: Boolean(process.env.OPENAI_API_KEY), available: Boolean(process.env.OPENAI_API_KEY) }, ebay: { configured: ebayProvider.capabilities.active, available: ebayProvider.capabilities.active }, soldgraph: { configured: soldgraphProvider.capabilities.active, available: soldgraphProvider.capabilities.active }, supabase: { configured: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY), available: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) }, checkedAt: now() });

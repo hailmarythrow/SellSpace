@@ -17,6 +17,8 @@ Saved scans and listing drafts currently persist in browser `localStorage` with 
 
 The research request now runs through `/api/research`, so provider keys remain server-only. With no live keys configured, the app remains in clearly labeled DEMO mode. When a live provider is configured, the app returns only live/provider-reported data and does not silently fall back to demo prices.
 
+Quick Scan image identification runs through `/api/identify` using `GEMINI_API_KEY`. The default `GEMINI_MODEL=gemini-2.5-flash` accepts inline image input. The route validates image type/size and the structured identification response; failures stop the workflow with an error and do not trigger research.
+
 - eBay Browse API: set `EBAY_CLIENT_ID`, `EBAY_CLIENT_SECRET`, and optionally `EBAY_MARKETPLACE_ID`. This supports active listing search through eBay's official Browse API. The Browse API does not provide a general historical sold-search endpoint.
 - Soldgraph: set `SOLDGRAPH_API_KEY` to query eBay, Mercari, Poshmark, and Depop routes from one server-side provider. Depop is active-listings-only in the current adapter. Poshmark sold prices are classified as displayed sold/listing asks, not verified transactions.
 - Scavio: `SCAVIO_API_KEY` is reserved for a future adapter behind the same provider interface; it is not called until its response contract is explicitly implemented and tested.

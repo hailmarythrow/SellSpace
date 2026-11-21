@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { identificationSchema, parseImageDataUrl } from "@/lib/identification";
+import { parseGeminiFailure } from "@/lib/gemini-errors";
 
 const model = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
 const prompt = `Identify the physical product in this photograph for a resale research app. Return ONLY valid JSON with these keys: name, brand, model, category, color, size, confidence, notes. Use empty strings for details that are not visible. Do not guess exact specifications, measurements, or a model number that is not supported by visible evidence. confidence must be a number from 0 to 1.`;
@@ -10,7 +11,12 @@ export async function POST(request: Request) {
   try {
     const body = await request.json(); const image = parseImageDataUrl(body?.imageDataUrl);
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": key }, signal: AbortSignal.timeout(20000), body: JSON.stringify({ contents: [{ parts: [{ inline_data: { mime_type: image.mimeType, data: image.data } }, { text: prompt }] }], generationConfig: { responseMimeType: "application/json", temperature: 0.1 } }) });
-    if (!response.ok) return NextResponse.json({ error: "Gemini could not identify this image right now. Try a clearer photo." }, { status: 502 });
+    if (!response.ok) {
+      const failure = parseGeminiFailure(response.status, await response.text());
+      console.error("[gemini-identify-upstream-failure]", JSON.stringify({ httpStatus: response.status, providerCode: failure.providerCode, category: failure.category, message: failure.providerMessage, model }));
+      const clientStatus = failure.category === "quota_exhausted" ? 429 : failure.category === "temporary_provider_failure" ? 503 : 502;
+      return NextResponse.json({ error: failure.userMessage, category: failure.category }, { status: clientStatus });
+    }
     const payload = await response.json() as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
     const text = payload.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("").trim();
     if (!text) return NextResponse.json({ error: "Gemini returned no identification. Try a clearer photo." }, { status: 422 });

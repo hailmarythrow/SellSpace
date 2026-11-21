@@ -1,5 +1,6 @@
 import type { Listing, Marketplace, MarketplaceProvider, ResearchResult } from "./types";
 import { listingArraySchema } from "./schemas";
+import { checkGeminiModel } from "./gemini-health";
 
 const images = ["https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=160&q=80", "https://images.unsplash.com/photo-1524805444758-089113d48a6d?w=160&q=80", "https://images.unsplash.com/photo-1547996160-81dfa63595aa?w=160&q=80"];
 const demoActive: Listing[] = [
@@ -47,4 +48,4 @@ export const getResearch = async (query: string): Promise<ResearchResult> => {
   return { active, sold, soldAvailable: sold.length > 0, sourceNote: note, externalSearchLinks: externalSearchLinks(query), confidence: active.length + sold.length >= 10 ? "high" : active.length + sold.length >= 3 ? "medium" : "low" };
 };
 
-export const providerHealth = async () => ({ gemini: { configured: Boolean(process.env.GEMINI_API_KEY), available: Boolean(process.env.GEMINI_API_KEY) }, openai: { configured: Boolean(process.env.OPENAI_API_KEY), available: Boolean(process.env.OPENAI_API_KEY) }, ebay: { configured: ebayProvider.capabilities.active, available: ebayProvider.capabilities.active }, soldgraph: { configured: soldgraphProvider.capabilities.active, available: soldgraphProvider.capabilities.active }, supabase: { configured: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY), available: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) }, checkedAt: now() });
+export const providerHealth = async () => ({ gemini: await checkGeminiModel(), openai: { configured: Boolean(process.env.OPENAI_API_KEY), available: Boolean(process.env.OPENAI_API_KEY) }, ebay: { configured: ebayProvider.capabilities.active, available: ebayProvider.capabilities.active }, soldgraph: { configured: soldgraphProvider.capabilities.active, available: soldgraphProvider.capabilities.active }, supabase: { configured: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY), available: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) }, checkedAt: now() });

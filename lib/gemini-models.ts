@@ -30,12 +30,12 @@ async function probeModel(key: string, model: string) {
 }
 
 export async function resolveGeminiModel(): Promise<Resolution> {
-  const key = process.env.GEMINI_API_KEY; const preferredModel = process.env.GEMINI_MODEL || defaultPreferred;
+  const key = process.env.GEMINI_API_KEY; const preferredModel = defaultPreferred; const configuredModel = process.env.GEMINI_MODEL?.trim();
   if (!key) return { configured: false, available: false, preferredModel, fallbackUsed: false, attempts: [] };
   const fingerprint = keyFingerprint(key); if (cached && cached.expiresAt > Date.now() && cached.keyFingerprint === fingerprint && cached.resolution.preferredModel === preferredModel) return cached.resolution;
   const attempts: Attempt[] = []; let listed: ListedModel[];
   try { listed = await listModels(key); } catch (error) { const failure = error as { category?: string; providerCode?: string }; const resolution = { configured: true, available: false, preferredModel, fallbackUsed: false, attempts, failureCategory: failure.category ?? "temporary_provider_failure" }; console.error("[gemini-model-resolution-failure]", JSON.stringify({ category: resolution.failureCategory, providerCode: failure.providerCode ?? "UNKNOWN", preferredModel })); return resolution; }
-  const available = new Map(listed.map((model) => [modelId(model.name ?? ""), model])); const candidates = Array.from(new Set([preferredModel, ...(process.env.GEMINI_FALLBACK_MODELS?.split(",").map((item) => item.trim()).filter(Boolean) ?? defaultFallbacks)]));
+  const available = new Map(listed.map((model) => [modelId(model.name ?? ""), model])); const configuredFallbacks = [configuredModel, ...(process.env.GEMINI_FALLBACK_MODELS?.split(",").map((item) => item.trim()).filter(Boolean) ?? [])].filter((model): model is string => Boolean(model)); const candidates = Array.from(new Set([preferredModel, ...configuredFallbacks, ...defaultFallbacks]));
   for (const candidate of candidates) {
     const model = available.get(candidate); const supports = Boolean(model?.supportedGenerationMethods?.includes("generateContent")); const attempt: Attempt = { model: candidate, listed: Boolean(model), supportsGenerateContent: supports, probeSucceeded: false };
     if (!model || !supports) { attempt.category = "model_unavailable"; attempts.push(attempt); continue; }

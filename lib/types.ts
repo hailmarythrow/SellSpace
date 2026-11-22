@@ -1,5 +1,5 @@
 export type Condition = "New" | "Like new" | "Good" | "Fair";
-export type Marketplace = "eBay" | "Mercari" | "Poshmark" | "Depop" | "Manual";
+export type Marketplace = "eBay" | "Mercari" | "Poshmark" | "Depop" | "Manual" | "Web";
 export type ListingKind = "active" | "sold";
 export type PriceClassification = "active_asking" | "displayed_sold" | "verified_transaction";
 
@@ -18,8 +18,8 @@ export type Item = {
 
 export type Costs = { purchase: number; fees: number; shipping: number; other: number };
 
-export type ResearchSource = "live" | "manual" | "unavailable" | "legacy";
-export type ResearchResult = { active: Listing[]; sold: Listing[]; soldAvailable: boolean; source?: ResearchSource; sourceNote: string; externalSearchLinks?: { marketplace: Marketplace; url: string; label: string }[]; confidence?: "low" | "medium" | "high"; resaleRange?: { low: number; high: number; currency: string } };
+export type ResearchSource = "live" | "web" | "manual" | "unavailable" | "legacy";
+export type ResearchResult = { active: Listing[]; sold: Listing[]; soldAvailable: boolean; source?: ResearchSource; sourceNote: string; externalSearchLinks?: { marketplace: Marketplace; url: string; label: string }[]; confidence?: "low" | "medium" | "high"; resaleRange?: { low: number; high: number; currency: string }; researchQueries?: string[]; missingInformation?: string[] };
 export const researchSource = (research: ResearchResult): ResearchSource => { const storedSource = (research as unknown as { source?: string }).source; if (storedSource === "legacy" || storedSource === "demo") return "legacy"; if (research.source) return research.source; return research.active.some((listing) => listing.demo) || research.sold.some((listing) => listing.demo) ? "legacy" : research.active.length || research.sold.length ? "live" : "unavailable"; };
 
 export type Scan = {

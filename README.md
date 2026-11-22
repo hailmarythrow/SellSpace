@@ -25,6 +25,14 @@ Quick Scan image identification runs through `/api/identify` using `GEMINI_API_K
 
 `/api/health` reports whether OpenAI, eBay, Soldgraph, and Supabase variables are configured in the current environment. It does not return secret values.
 
+### Optional automated web research
+
+SellerApp includes an opt-in Gemini Google Search Grounding adapter. Set `GEMINI_WEB_RESEARCH_ENABLED=true` only after confirming billing, quota, and model support for the deployment; it is `false` by default so scans never activate a potentially billable search tool unexpectedly. Grounded results are accepted only when Gemini returns a numeric price, classification, and URL that also appears in grounding metadata. Unsupported or restricted marketplace pages are not scraped or bypassed. If grounding is disabled or unavailable, the app shows an honest empty state with external marketplace links and supports user-assisted URL, observed-price, or screenshot evidence in the research workspace.
+
+Automated grounding is limited to five operations per UTC day by default with `GEMINI_WEB_RESEARCH_DAILY_LIMIT=5`; the limit is capped at five and has no paid fallback. The in-memory counter protects a warm server instance. A future shared deployment should move the counter to Supabase or another shared store for a global cross-instance quota.
+
+Google's current [Gemini pricing](https://ai.google.dev/gemini-api/docs/pricing) and [Google Search grounding](https://ai.google.dev/gemini-api/docs/google-search) documentation should be reviewed before enabling this optional service.
+
 ## Private Vercel preview deployment
 
 This project is configured for Vercel with `vercel.json`. Import the repository as a **private** GitHub repository and use a Vercel Preview deployment for phone testing. Add the values from `.env.example` in Vercel Project Settings → Environment Variables, selecting Preview for credentials you want available there.
